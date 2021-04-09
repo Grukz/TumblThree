@@ -76,6 +76,14 @@ namespace TumblThree.Applications.Crawler
             semaphoreSlim = new SemaphoreSlim(shellService.Settings.ConcurrentScans);
             trackedTasks = new List<Task>();
 
+            if (!await CheckIfLoggedInAsync())
+            {
+                Logger.Error("TumblrLikedByCrawler:GetUrlsAsync: {0}", "User not logged in");
+                shellService.ShowError(new Exception("User not logged in"), Resources.NotLoggedIn, blog.Name);
+                postQueue.CompleteAdding();
+                return;
+            }
+
             long pagination = CreateStartPagination();
 
             // TODO: find way to parallelize without losing content.
@@ -114,14 +122,6 @@ namespace TumblThree.Applications.Crawler
 
         public override async Task IsBlogOnlineAsync()
         {
-            if (!await CheckIfLoggedInAsync())
-            {
-                Logger.Error("TumblrLikedByCrawler:GetUrlsAsync: {0}", "User not logged in");
-                shellService.ShowError(new Exception("User not logged in"), Resources.NotLoggedIn, blog.Name);
-                postQueue.CompleteAdding();
-                return;
-            }
-
             try
             {
                 await GetRequestAsync(blog.Url);
@@ -254,6 +254,21 @@ namespace TumblThree.Applications.Crawler
 
             if (blog.RegExVideos)
                 AddGenericVideoUrl(document);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                semaphoreSlim?.Dispose();
+                downloader.Dispose();
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
         }
     }
 }

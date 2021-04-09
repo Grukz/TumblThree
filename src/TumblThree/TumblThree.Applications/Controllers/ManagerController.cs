@@ -374,6 +374,7 @@ namespace TumblThree.Applications.Controllers
                 ICrawler crawler = crawlerFactory.GetCrawler(blog, new CancellationToken(), new PauseToken(),
                     new Progress<DownloadProgress>());
                 await crawler.IsBlogOnlineAsync();
+                crawler.Dispose();
             }
             finally
             {
@@ -525,7 +526,7 @@ namespace TumblThree.Applications.Controllers
                     }
                 }
 
-                string indexFile = Path.Combine(blog.Location, blog.Name) + "." + blog.BlogType;
+                string indexFile = Path.Combine(blog.Location, blog.Name) + "." + blog.OriginalBlogType;
                 try
                 {
                     File.Delete(indexFile);
@@ -607,6 +608,7 @@ namespace TumblThree.Applications.Controllers
                 if (CheckIfBlogAlreadyExists(blog))
                     return;
 
+                SetDefaultTumblrBlogCrawler(blog);
                 SaveBlog(blog);
             }
 
@@ -622,12 +624,19 @@ namespace TumblThree.Applications.Controllers
 
         private bool CheckIfBlogAlreadyExists(IBlog blog)
         {
-            if (managerService.BlogFiles.Any(blogs => blogs.Name.Equals(blog.Name) && blogs.BlogType.Equals(blog.BlogType)))
+            if (managerService.BlogFiles.Any(blogs => blogs.Name.Equals(blog.Name) && (blogs.BlogType.Equals(blog.BlogType) || CheckIfBlogIsTumblrBlog(blogs, blog))))
             {
                 shellService.ShowError(null, Resources.BlogAlreadyExist, blog.Name);
                 return true;
             }
 
+            return false;
+        }
+
+        private bool CheckIfBlogIsTumblrBlog(IBlog blogs, IBlog toMatch)
+        {
+            if (blogs.BlogType == BlogTypes.tumblr || blogs.BlogType == BlogTypes.tmblrpriv)
+                return toMatch.BlogType == BlogTypes.tumblr || toMatch.BlogType == BlogTypes.tmblrpriv;
             return false;
         }
 
@@ -637,6 +646,7 @@ namespace TumblThree.Applications.Controllers
                 new Progress<DownloadProgress>());
 
             await crawler.UpdateMetaInformationAsync();
+            crawler.Dispose();
         }
 
         private IBlog CheckIfCrawlableBlog(string blogUrl)
@@ -661,6 +671,13 @@ namespace TumblThree.Applications.Controllers
             }
 
             return blog;
+        }
+
+        private void SetDefaultTumblrBlogCrawler(IBlog blog)
+        {
+            if (shellService.Settings.OverrideTumblrBlogCrawler)
+                if (blog.BlogType == BlogTypes.tumblr || blog.BlogType == BlogTypes.tmblrpriv)
+                    blog.BlogType = shellService.Settings.TumblrBlogCrawlerType.MapToBlogType();
         }
 
         private void OnClipboardContentChanged(object sender, EventArgs e)
